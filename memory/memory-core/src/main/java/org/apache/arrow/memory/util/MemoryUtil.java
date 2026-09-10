@@ -16,6 +16,7 @@
  */
 package org.apache.arrow.memory.util;
 
+import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
@@ -25,9 +26,44 @@ public class MemoryUtil {
   /** If the native byte order is little-endian. */
   public static final boolean LITTLE_ENDIAN = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN;
 
-  private static final MemoryUtilAccessor ACCESSOR = UnsafeMemoryAccessor.INSTANCE;
+  /** The system property used to select the {@link MemoryUtilAccessor} implementation. */
+  public static final String MEMORY_ACCESSOR_TYPE_PROPERTY_NAME = "arrow.memory.accessor.type";
+
+  private static final org.slf4j.Logger logger =
+      org.slf4j.LoggerFactory.getLogger(MemoryUtil.class);
+
+  private static final MemoryUtilAccessor ACCESSOR = resolveAccessor();
 
   private MemoryUtil() {}
+
+  private static MemoryUtilAccessor resolveAccessor() {
+    String type = System.getProperty(MEMORY_ACCESSOR_TYPE_PROPERTY_NAME, "Unsafe");
+    if ("FFM".equals(type)) {
+      logger.info(
+          "{}=FFM, loading org.apache.arrow.memory.ffm.FfmMemoryAccessor",
+          MEMORY_ACCESSOR_TYPE_PROPERTY_NAME);
+      return loadFfmAccessor();
+    }
+    return UnsafeMemoryAccessor.INSTANCE;
+  }
+
+  @SuppressWarnings({"nullness:argument", "nullness:return"})
+  private static MemoryUtilAccessor loadFfmAccessor() {
+    try {
+      Field field =
+          Class.forName("org.apache.arrow.memory.ffm.FfmMemoryAccessor")
+              .getDeclaredField("INSTANCE");
+      field.setAccessible(true);
+      return (MemoryUtilAccessor) field.get(null);
+    } catch (ReflectiveOperationException e) {
+      throw new RuntimeException(
+          "Please add arrow-memory-ffm to your classpath,"
+              + " no FfmMemoryAccessor found to satisfy "
+              + MEMORY_ACCESSOR_TYPE_PROPERTY_NAME
+              + "=FFM",
+          e);
+    }
+  }
 
   /**
    * Given a {@link ByteBuffer}, gets the address the underlying memory space.
