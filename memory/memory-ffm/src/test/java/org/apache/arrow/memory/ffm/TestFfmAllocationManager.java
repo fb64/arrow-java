@@ -31,7 +31,9 @@ public class TestFfmAllocationManager {
 
   private BufferAllocator createFfmAllocator() {
     return new RootAllocator(
-        RootAllocator.configBuilder().allocationManagerFactory(FfmAllocationManager.FACTORY).build());
+        RootAllocator.configBuilder()
+            .allocationManagerFactory(FfmAllocationManager.FACTORY)
+            .build());
   }
 
   private void readWriteArrowBuf(ArrowBuf buffer) {
