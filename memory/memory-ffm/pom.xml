@@ -57,6 +57,33 @@ under the License.
           </archive>
         </configuration>
       </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <excludes>
+            <exclude>**/TestMemoryUtilFfmWiring.java</exclude>
+          </excludes>
+        </configuration>
+        <executions>
+          <execution>
+            <id>ffm-accessor-wiring-test</id>
+            <goals>
+              <goal>test</goal>
+            </goals>
+            <phase>test</phase>
+            <configuration>
+              <excludes combine.self="override"/>
+              <includes>
+                <include>**/TestMemoryUtilFfmWiring.java</include>
+              </includes>
+              <systemPropertyVariables>
+                <arrow.memory.accessor.type>FFM</arrow.memory.accessor.type>
+              </systemPropertyVariables>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
     </plugins>
   </build>
 </project>
