@@ -18,9 +18,10 @@ package org.apache.arrow.memory.ffm;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -90,24 +91,46 @@ public class TestFfmMemoryAccessor {
   @Test
   public void byteArrayIndexedAccessors() {
     byte[] bytes = new byte[Long.BYTES];
-    ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.nativeOrder()).putLong(0, 42L);
+    ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder()).putLong(0, 42L);
     assertEquals(42L, FfmMemoryAccessor.INSTANCE.getLong(bytes, 0));
+
+    byte[] intBytes = new byte[Integer.BYTES * 2];
+    ByteBuffer.wrap(intBytes).order(ByteOrder.nativeOrder()).putInt(0, 123456789);
+    ByteBuffer.wrap(intBytes).order(ByteOrder.nativeOrder()).putInt(Integer.BYTES, -987654321);
+    assertEquals(123456789, FfmMemoryAccessor.INSTANCE.getInt(intBytes, 0));
+    assertEquals(-987654321, FfmMemoryAccessor.INSTANCE.getInt(intBytes, Integer.BYTES));
   }
 
+  /**
+   * {@link FfmMemoryAccessor#getByteBufferAddress} must return the address of byte 0 of the backing
+   * memory regardless of the buffer's position, matching {@code UnsafeMemoryAccessor}: callers add
+   * {@code position()} themselves. It must also not disturb the caller's buffer state.
+   */
   @Test
-  public void directBufferRoundTripsWithoutReflection() {
-    address = FfmMemoryAccessor.INSTANCE.allocateMemory(8);
-    FfmMemoryAccessor.INSTANCE.putLong(address, 42L);
-
-    ByteBuffer buf = FfmMemoryAccessor.INSTANCE.directBuffer(address, 8);
-    assertTrue(buf.isDirect());
-    assertEquals(42L, buf.order(java.nio.ByteOrder.nativeOrder()).getLong(0));
+  public void getByteBufferAddressIsPositionIndependent() {
+    address = FfmMemoryAccessor.INSTANCE.allocateMemory(16);
+    ByteBuffer buf = FfmMemoryAccessor.INSTANCE.directBuffer(address, 16);
     assertEquals(address, FfmMemoryAccessor.INSTANCE.getByteBufferAddress(buf));
+
+    buf.position(5);
+    buf.limit(12);
+    assertEquals(address, FfmMemoryAccessor.INSTANCE.getByteBufferAddress(buf));
+    assertEquals(5, buf.position());
+    assertEquals(12, buf.limit());
+
+    ByteBuffer slice = buf.slice();
+    assertEquals(address + 5, FfmMemoryAccessor.INSTANCE.getByteBufferAddress(slice));
+    slice.position(3);
+    assertEquals(address + 5, FfmMemoryAccessor.INSTANCE.getByteBufferAddress(slice));
+
+    ByteBuffer readOnly = buf.asReadOnlyBuffer();
+    readOnly.position(7);
+    assertEquals(address, FfmMemoryAccessor.INSTANCE.getByteBufferAddress(readOnly));
   }
 
   @Test
   public void directBufferRejectsNegativeCapacity() {
-    org.junit.jupiter.api.Assertions.assertThrows(
+    assertThrows(
         IllegalArgumentException.class, () -> FfmMemoryAccessor.INSTANCE.directBuffer(1, -1));
   }
 }

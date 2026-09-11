@@ -49,9 +49,14 @@ under the License.
         <configuration>
           <archive>
             <manifestEntries>
-              <!-- Self-grant native access for classpath (unnamed-module) consumers, so
-                   MemorySegment.reinterpret(...) doesn't require the enable-native-access JVM
-                   flag on the consumer's command line. See Task 5 for the module-path caveat. -->
+              <!-- NOT sufficient for consumers: the JVM only honours Enable-Native-Access in the
+                   manifest of the jar it was launched with (java -jar), so this only helps in the
+                   rare case where arrow-memory-ffm itself is the launched jar. Consumers that put
+                   this jar on the classpath (the normal case) still need the JVM command line flag
+                   "enable-native-access=ALL-UNNAMED" for MemorySegment.reinterpret(...), and
+                   module-path consumers need "enable-native-access=org.apache.arrow.memory.ffm".
+                   Kept because it is harmless and does help in that rare launched-jar case. See
+                   FfmMemoryAccessor's class javadoc. -->
               <Enable-Native-Access>ALL-UNNAMED</Enable-Native-Access>
             </manifestEntries>
           </archive>
@@ -62,11 +67,17 @@ under the License.
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
           <excludes>
+            <!-- Requires arrow.memory.accessor.type=FFM -->
             <exclude>**/TestMemoryUtilFfmWiring.java</exclude>
+            <exclude>**/TestFfmArrowBufByteBuffer.java</exclude>
+            <!-- Only meaningful when NOT running with add-opens -->
+            <exclude>**/TestFfmMemoryAccessorWithoutAddOpens.java</exclude>
           </excludes>
         </configuration>
         <executions>
           <execution>
+            <!-- Requires arrow.memory.accessor.type=FFM before MemoryUtil's static init,
+                 isolated from the default run so the property doesn't leak into it -->
             <id>ffm-accessor-wiring-test</id>
             <goals>
               <goal>test</goal>
@@ -76,10 +87,27 @@ under the License.
               <excludes combine.self="override"/>
               <includes>
                 <include>**/TestMemoryUtilFfmWiring.java</include>
+                <include>**/TestFfmArrowBufByteBuffer.java</include>
               </includes>
               <systemPropertyVariables>
                 <arrow.memory.accessor.type>FFM</arrow.memory.accessor.type>
               </systemPropertyVariables>
+            </configuration>
+          </execution>
+          <execution>
+            <!-- Proves the accessor needs no add-opens: the inherited argLine, which carries
+                 "add-opens=java.base/java.nio=...", is overridden to empty here -->
+            <id>no-add-opens-tests</id>
+            <goals>
+              <goal>test</goal>
+            </goals>
+            <phase>test</phase>
+            <configuration>
+              <argLine combine.self="override"/>
+              <excludes combine.self="override"/>
+              <includes>
+                <include>**/TestFfmMemoryAccessorWithoutAddOpens.java</include>
+              </includes>
             </configuration>
           </execution>
         </executions>

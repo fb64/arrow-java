@@ -44,6 +44,12 @@ public class MemoryUtil {
           MEMORY_ACCESSOR_TYPE_PROPERTY_NAME);
       return loadFfmAccessor();
     }
+    if (!"Unsafe".equals(type) && !type.isEmpty()) {
+      logger.warn(
+          "Unrecognized {}={}, falling back to Unsafe (valid values: Unsafe, FFM)",
+          MEMORY_ACCESSOR_TYPE_PROPERTY_NAME,
+          type);
+    }
     return UnsafeMemoryAccessor.INSTANCE;
   }
 
@@ -140,6 +146,16 @@ public class MemoryUtil {
     return ACCESSOR.allocateMemory(bytes);
   }
 
+  /**
+   * Frees native memory at the given address.
+   *
+   * <p>Behavior depends on the accessor selected by {@value #MEMORY_ACCESSOR_TYPE_PROPERTY_NAME}.
+   * The default Unsafe accessor frees any valid native address, whatever allocated it. The FFM
+   * accessor ({@code org.apache.arrow.memory.ffm.FfmMemoryAccessor}) only frees addresses that came
+   * from its own {@link #allocateMemory}, because it releases the owning {@code Arena} rather than
+   * the address; an address from any other source (JNI, a foreign {@code malloc}) is a silent no-op
+   * there.
+   */
   public static void freeMemory(long address) {
     ACCESSOR.freeMemory(address);
   }
