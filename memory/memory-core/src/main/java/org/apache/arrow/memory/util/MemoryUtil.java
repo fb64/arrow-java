@@ -19,6 +19,8 @@ package org.apache.arrow.memory.util;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import org.apache.arrow.memory.DefaultAllocationManagerOption;
+import org.apache.arrow.util.VisibleForTesting;
 
 /** Utilities for memory related operations. */
 public class MemoryUtil {
@@ -26,7 +28,13 @@ public class MemoryUtil {
   /** If the native byte order is little-endian. */
   public static final boolean LITTLE_ENDIAN = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN;
 
-  /** The system property used to select the {@link MemoryUtilAccessor} implementation. */
+  /**
+   * The system property used to select the {@link MemoryUtilAccessor} implementation. When unset,
+   * this defaults to FFM if {@link
+   * DefaultAllocationManagerOption#ALLOCATION_MANAGER_TYPE_PROPERTY_NAME} (or its environment
+   * variable) is set to {@code FFM}, so that selecting the FFM allocation manager avoids {@code
+   * sun.misc.Unsafe} entirely unless this property overrides it.
+   */
   public static final String MEMORY_ACCESSOR_TYPE_PROPERTY_NAME = "arrow.memory.accessor.type";
 
   private static final org.slf4j.Logger logger =
@@ -36,13 +44,44 @@ public class MemoryUtil {
 
   private MemoryUtil() {}
 
+  /** Returns the fully qualified class name of the {@link MemoryUtilAccessor} in use. */
+  @VisibleForTesting
+  public static String getAccessorClassName() {
+    return ACCESSOR.getClass().getName();
+  }
+
   private static MemoryUtilAccessor resolveAccessor() {
-    String type = System.getProperty(MEMORY_ACCESSOR_TYPE_PROPERTY_NAME, "Unsafe");
+    String type = System.getProperty(MEMORY_ACCESSOR_TYPE_PROPERTY_NAME, "");
     if ("FFM".equals(type)) {
       logger.info(
           "{}=FFM, loading org.apache.arrow.memory.ffm.FfmMemoryAccessor",
           MEMORY_ACCESSOR_TYPE_PROPERTY_NAME);
       return loadFfmAccessor();
+    }
+    if (type.isEmpty()
+        && DefaultAllocationManagerOption.getDefaultAllocationManagerType()
+            == DefaultAllocationManagerOption.AllocationManagerType.FFM) {
+      try {
+        MemoryUtilAccessor accessor = loadFfmAccessor();
+        logger.info(
+            "{}=FFM, also loading org.apache.arrow.memory.ffm.FfmMemoryAccessor to avoid"
+                + " sun.misc.Unsafe (override with {}=Unsafe if this is not wanted)",
+            DefaultAllocationManagerOption.ALLOCATION_MANAGER_TYPE_PROPERTY_NAME,
+            MEMORY_ACCESSOR_TYPE_PROPERTY_NAME);
+        return accessor;
+      } catch (RuntimeException e) {
+        // Unlike an explicit arrow.memory.accessor.type=FFM request, this preference is only
+        // inferred from a different property, which may not even be load-bearing (e.g. a
+        // caller-supplied custom AllocationManager.Factory that never reads it). Fall back
+        // instead of poisoning MemoryUtil's <clinit> for the rest of the JVM's life (JLS 12.4.2).
+        logger.warn(
+            "{}=FFM but arrow-memory-ffm is not on the classpath; falling back to Unsafe for {}"
+                + " (set {}=Unsafe to silence this warning)",
+            DefaultAllocationManagerOption.ALLOCATION_MANAGER_TYPE_PROPERTY_NAME,
+            MEMORY_ACCESSOR_TYPE_PROPERTY_NAME,
+            MEMORY_ACCESSOR_TYPE_PROPERTY_NAME,
+            e);
+      }
     }
     if (!"Unsafe".equals(type) && !type.isEmpty()) {
       logger.warn(

@@ -44,7 +44,11 @@ public class DefaultAllocationManagerOption {
     /** Unsafe based allocation manager. */
     Unsafe,
 
-    /** FFM (java.lang.foreign) based allocation manager. */
+    /**
+     * FFM (java.lang.foreign) based allocation manager. Also switches {@code
+     * org.apache.arrow.memory.util.MemoryUtil} to its FFM-based accessor (avoiding {@code
+     * sun.misc.Unsafe} entirely) unless {@code arrow.memory.accessor.type} says otherwise.
+     */
     FFM,
 
     /** Unknown type. */

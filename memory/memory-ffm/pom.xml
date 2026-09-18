@@ -70,6 +70,8 @@ under the License.
             <!-- Requires arrow.memory.accessor.type=FFM -->
             <exclude>**/TestMemoryUtilFfmWiring.java</exclude>
             <exclude>**/TestFfmArrowBufByteBuffer.java</exclude>
+            <!-- Requires arrow.allocation.manager.type=FFM before MemoryUtil's static init -->
+            <exclude>**/TestAllocationManagerTypeImpliesAccessor.java</exclude>
             <!-- Only meaningful when NOT running with add-opens -->
             <exclude>**/TestFfmMemoryAccessorWithoutAddOpens.java</exclude>
           </excludes>
@@ -91,6 +93,25 @@ under the License.
               </includes>
               <systemPropertyVariables>
                 <arrow.memory.accessor.type>FFM</arrow.memory.accessor.type>
+              </systemPropertyVariables>
+            </configuration>
+          </execution>
+          <execution>
+            <!-- Requires arrow.allocation.manager.type=FFM (with arrow.memory.accessor.type left
+                 unset) before MemoryUtil's static init, isolated from the default run so the
+                 property doesn't leak into it -->
+            <id>allocation-manager-type-implies-accessor-test</id>
+            <goals>
+              <goal>test</goal>
+            </goals>
+            <phase>test</phase>
+            <configuration>
+              <excludes combine.self="override"/>
+              <includes>
+                <include>**/TestAllocationManagerTypeImpliesAccessor.java</include>
+              </includes>
+              <systemPropertyVariables>
+                <arrow.allocation.manager.type>FFM</arrow.allocation.manager.type>
               </systemPropertyVariables>
             </configuration>
           </execution>
